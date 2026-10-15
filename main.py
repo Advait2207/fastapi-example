@@ -55,8 +55,8 @@ class Response(BaseModel, Generic[T]):
     data: T
 
 @app.get("/campaigns", response_model=Response[list[Campaign]])
-async def read_campaigns(session: SessionDep, page: int = Query(1, ge=1)):
-    limit = 5
+async def read_campaigns(session: SessionDep, page: int = Query(1, ge=1), page_size: int = Query(10, ge=1)):
+    limit = page_size
     offset = (page-1) * limit
     data = session.exec(select(Campaign).order_by(col(Campaign.campaign_id)).offset(offset).limit(limit)).all()
     return {"data": data}
