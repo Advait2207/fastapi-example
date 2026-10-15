@@ -1,10 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, Query
 from datetime import datetime, timezone
 from typing import Annotated, Generic, TypeVar
 from pydantic import BaseModel
 
-from sqlmodel import SQLModel, create_engine, Session, Field, select
+from sqlmodel import SQLModel, col, create_engine, Session, Field, select
 
 class Campaign(SQLModel, table=True):
     campaign_id: int | None = Field(default=None, primary_key=True)
@@ -55,8 +55,10 @@ class Response(BaseModel, Generic[T]):
     data: T
 
 @app.get("/campaigns", response_model=Response[list[Campaign]])
-async def read_campaigns(session: SessionDep):
-    data = session.exec(select(Campaign)).all()
+async def read_campaigns(session: SessionDep, page: int = Query(1, ge=1)):
+    limit = 5
+    offset = (page-1) * limit
+    data = session.exec(select(Campaign).order_by(col(Campaign.campaign_id)).offset(offset).limit(limit)).all()
     return {"data": data}
 
 
