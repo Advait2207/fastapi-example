@@ -1,9 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI, HTTPException, Depends, Query
+from fastapi import FastAPI, HTTPException, Depends, Query, Request
 from datetime import datetime, timezone
-from typing import Annotated, Generic, TypeVar
+from typing import Annotated, Generic, Optional, TypeVar
 from pydantic import BaseModel
 
+from sqlalchemy import func
 from sqlmodel import SQLModel, col, create_engine, Session, Field, select
 
 class Campaign(SQLModel, table=True):
@@ -54,12 +55,38 @@ T = TypeVar("T")
 class Response(BaseModel, Generic[T]):
     data: T
 
-@app.get("/campaigns", response_model=Response[list[Campaign]])
-async def read_campaigns(session: SessionDep, page: int = Query(1, ge=1), page_size: int = Query(10, ge=1)):
+class PaginatedResponse(BaseModel, Generic[T]):
+    data : T
+    next: Optional[str]
+    prev: Optional[str]
+    count: int
+
+@app.get("/campaigns", response_model=PaginatedResponse[list[Campaign]])
+async def read_campaigns(request: Request, session: SessionDep, page: int = Query(1, ge=1), page_size: int = Query(10, ge=1)):
     limit = page_size
     offset = (page-1) * limit
-    data = session.exec(select(Campaign).order_by(col(Campaign.campaign_id)).offset(offset).limit(limit)).all()
-    return {"data": data}
+    data = session.exec(select(Campaign).order_by(col(Campaign.campaign_id)).offset(offset).limit(limit)).all() #type: ignore
+
+    base_url = str(request.url).split('?')[0]
+
+    total = session.exec(select(func.count()).select_from(Campaign)).one()
+
+    if offset + limit < total:
+        next_url = f"{base_url}?page={page+1}&page_size={limit}"
+    else :
+        next_url = None    
+
+    if page > 1:
+        prev_url = f"{base_url}?page={page-1}&page_size={limit}"
+    else :
+        prev_url = None
+
+    return {
+        "count": total,
+        "next": next_url,
+        "prev":prev_url,
+        "data": data
+    }
 
 
 @app.get("/campaigns/{id}", response_model=Response[Campaign])
